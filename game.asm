@@ -39,10 +39,10 @@
 
 .data
 
-# Store the offsets from the ship position. First 8 are pod, second 8 are service module, last 4 are legs. 20 pixels total
-S: .word 8 12 516 520 524 528 1032 1036 1540 1544 1548 1552 2052 2056 2060 2064 2048 2068 2560 2580
+# Store the offsets from the ship position. First 2 are pod, second 4 are service module, last 2 are legs. 8 pixels total
+S: .word 4 8 516 520 1028 1032 1536 1548
 # Store the screen behind the ship
-BH: .word 0:20
+BH: .word 0:8
 
 sw $t8, 8($a0)			# Layer 1
 	sw $t8, 12($a0)
@@ -73,6 +73,7 @@ sw $t8, 8($a0)			# Layer 1
 .global main
 main:
 	li $s0, BASE_ADDRESS # $s0 stores the base address for display
+	jal cBH
 	jal lev0
 	
 	li $s2, 0		# initial x velocity is 0
@@ -90,8 +91,8 @@ main1:
 main2:
 	jal mship
 	
-	# Sleep, 5Hz
-	li $a0, 200
+	# Sleep, 50ms, 20Hz
+	li $a0, 50
 	li $v0, 32
 	syscall
 	
@@ -154,12 +155,23 @@ lev0:	# Prepare level 0
 	addi $a0, $s0, 30220	# Draw medium platform
 	jal dmp
 	
-	addi $s1, $s0, 27160	# s1 stores the players position. 27984 is spawn
+	addi $s1, $s0, 28184	# s1 stores the players position. 27984 is spawn
 	jal dship
 	
 	lw $t0, 0($sp)
 	addi $sp, $sp, 4	# Return to main from the stack
 	jr $t0
+
+cBH:	# Clean bheind ship buffer
+	la $t0, BH		# &B[i]
+	li $t1, 0		# Counter
+	sw 0x0, 0($t0)		# B[i] = black
+	addi $t1, $t1, 1
+	addi $t0, $t0, 4
+	beq $t1, 8, cBH1
+cBH1:	jr $ra
+	
+	
 
 
 ss:	# Set the screen
@@ -288,19 +300,19 @@ dship1:	lw $t1, 0($t0)		# t1 = S[i]
 	sw $t8, 0($t2)		# write the pixel
 	addi $t0, $t0, 4
 	addi $t3, $t3, 1
-	bne $t3, 8, dship1
+	bne $t3, 2, dship1
 dship2:	lw $t1, 0($t0)		# t1 = S[i]
 	add $t2, $s1, $t1	# t2 = &write_to
 	sw $t9, 0($t2)		# write the pixel
 	addi $t0, $t0, 4
 	addi $t3, $t3, 1
-	bne $t3, 16, dship2
+	bne $t3, 6, dship2
 dship3:	lw $t1, 0($t0)		# t1 = S[i]
 	add $t2, $s1, $t1	# t2 = &write_to
 	sw $t7, 0($t2)		# write the pixel
 	addi $t0, $t0, 4
 	addi $t3, $t3, 1
-	bne $t3, 20, dship3
+	bne $t3, 8, dship3
 	jr $ra
 
 
@@ -447,7 +459,7 @@ mship1:	lw $t1, 0($t0)		# t1 = S[i]
 	addi $t0, $t0, 4
 	addi $t4, $t4, 4
 	addi $t3, $t3, 1
-	bne $t3, 20, mship1
+	bne $t3, 8, mship1
 		
 	# Calculate the new position
 	sll $t0, $s2, 2
@@ -471,7 +483,7 @@ mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	addi $t0, $t0, 4
 	addi $t4, $t4, 4
 	addi $t3, $t3, 1
-	bne $t3,20, mship2
+	bne $t3,8, mship2
 	
 	# 3. draw the ship in the new position
 	jal dship
