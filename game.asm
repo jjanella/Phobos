@@ -48,36 +48,44 @@
 
 .global main
 main:
-	li $t0, BASE_ADDRESS # $t0 stores the base address for display
-	li $a0, BASE_ADDRESS
+	li $s0, BASE_ADDRESS # $s0 stores the base address for display
+	jal lev0
 	
-	jal ss
-	
-	jal dship
-	addi $a0, $a0, 1024
-	jal dplm
-	addi $a0, $a0, -1024
-	
-	addi $a0, $a0, 40
-	jal dsp
-	
-	addi $a0, $a0, 64
-	jal dmp
-	
-	addi $a0, $a0, 80
-	jal dlp
-	
-	addi $a0, $zero, BASE_ADDRESS
-	addi $a0, $a0, 8192
-	jal dtur
-	
-	addi $a0, $a0, 80
-	jal dbul
 	
 	
 	li $v0, 10 # terminate the program gracefully
 	syscall
-
+	
+lev0:	# Prepare level 0
+	
+	addi $sp, $sp -4	# Save the address to return to main
+	sw $ra, 0($sp)
+	
+	la $a0, ($s0)
+	jal ss			# Clear the screen
+	addi $a0, $s0, 27900	# Draw the large platform
+	jal dlp
+	addi $a0, $s0, 27088	# Draw a landing pad on the large platform
+	jal dland
+	addi $a0, $s0, 16512	# Draw small platform 1
+	jal dsp
+	addi $a0, $s0, 13964	# Draw a fuel barell on small platform 1
+	jal dfuel
+	addi $a0, $s0, 22940	# Draw small platform 2
+	jal dsp
+	addi $a0, $s0, 21400	# Draw an enemy on small platform 2
+	jal dtur
+	addi $a0, $s0, 30220	# Draw medium platform
+	jal dmp
+	
+	addi $s1, $s0, 27160	# s1 stores the players position. 27984 is spawn
+	la $a0 ($s1)
+	jal dship
+	
+	
+	lw $t0, 0($sp)
+	addi $sp, $sp, 4	# Return to main from the stack
+	jr $t0
 
 
 ss:	# Set the screen
@@ -277,6 +285,54 @@ dbul:	# Draw a bullet. Topleft address is stored in $a0. $a0 is not modified
 	sw $t9, 8($a0)
 	
 	jr $ra
+
+dfuel:	# Draw a fuel barrel. Topleft address is stored in $a0. $a0 is not modified
+	li $t8 0xfd2f2e		# t8 stores red
+	li $t9 0xff8800		# t9 stores orange
+	
+	sw $t8 0($a0)		# Level 1
+	sw $t8 4($a0)
+	sw $t8 8($a0)
+	sw $t8 12($a0)
+	sw $t8 512($a0)		# Level 2
+	sw $t8 516($a0)
+	sw $t8 520($a0)
+	sw $t8 524($a0)
+	sw $t9 1024($a0)	# Level 3
+	sw $t9 1028($a0)
+	sw $t9 1032($a0)
+	sw $t9 1036($a0)
+	sw $t9 1536($a0)	# Level 4
+	sw $t9 1540($a0)
+	sw $t9 1544($a0)
+	sw $t9 1548($a0)
+	sw $t8 2048($a0)	# Level 5
+	sw $t8 2052($a0)
+	sw $t8 2056($a0)
+	sw $t8 2060($a0)
+	
+	jr $ra
+
+dland:	# Draw a landing pad. Topleft address is stored in $a0. $a0 is not modified
+	li $t8, 0x828282	# t8 stores dark grey
+	li $t9, 0xa4a4a4 	# t9 stores light grey
+	
+	sw $t8, 0($a0)		# Draw the 6 edge pixels
+	sw $t9, 4($a0)
+	sw $t8, 516($a0)
+	sw $t9, 32($a0)
+	sw $t8, 36($a0)
+	sw $t8, 544($a0)
+	
+	addi $t0, $a0, 8
+	li $t1 0
+dland0:	sw $t9 0($t0)		# Draw 6 more horizontal levels
+	sw $t9 512($t0)
+	beq $t1, 6, dland1
+	addi $t1, $t1, 1
+	addi $t0, $t0, 4
+	j dland0
+dland1:	jr $ra
 	
 	
 	
