@@ -61,8 +61,10 @@ main:
 	li $s2, 0		# s2 is the sub pixel y position, mod4
 	li $s3, 0		# s3 is the x velocity
 	li $s5, 0		# s5 stores subpixel y velocity
+	li $s6, 0x80		# initial fuel = 8*16 / 16*16 - 1
 	jal cBH			# clear behind
 	jal lev0
+	jal dbar		# draw bar ui
 
 
 mainlo:	# Main Game loop
@@ -71,13 +73,14 @@ mainlo:	# Main Game loop
 	lw $t1, 0($t0)
 	beq $t1, 1, inp		# Apply input
 main1:	# Apply gravity to velocity if not landed
-	li $t9, 0xff0000
 	addi $s5, $s5, 1	# Add gravity to vertical velocity
 	jal land
 	beqz $v0, main2		# if not landed: skip
 	blez $s5, main2		# if ascending: skip
 	li $s3, 0
 	li $s5, 0
+	bgtz $s6, main2		# if fuel remains: skip
+	j main			# yer done - no fuel
 	
 main2:	# Draw changes
 	jal mship
@@ -96,6 +99,7 @@ inp:	# Handle input
 	lw $t0, 4($t0)		# t0 = ascii code of input
 	beq $t0, 114, inpr
 	beq $t0, 113, inpq
+	blez $s6, main1		# no options if no fuel
 	beq $t0, 97, inpa
 	beq $t0, 119, inpw
 	beq $t0, 100, inpd
@@ -104,15 +108,18 @@ inp:	# Handle input
 
 inpa:	# accelerate left is pushed
 	addi $s3, $s3, -4
-	j main1
+	addi $s6, $s6, -4
+	j ubar
 
 inpw:	# increase thrust is pushed
 	addi $s5, $s5, -32
-	j main1
+	addi $s6, $s6, -8
+	j ubar
 
 inpd:	# accelerate right is pushed
 	addi $s3, $s3, 4
-	j main1
+	addi $s6, $s6, -4
+	j ubar
 
 inpr:# reset if r if pressed
 	j main
@@ -171,6 +178,55 @@ ssl:	add $t1, $t0, $a0
 	beq $t0, 32768, ss0
 	j ssl
 ss0:	jr $ra
+
+ubar:	# update the fuel bar
+	li $t7, 0		# partial square color
+	li $t8, 0x0		# t8 = black
+	li $t9, 0xff8800	# t9 = orange
+	add $t0, $s0, 20476	# bottom of guage
+	li $t2, 0		# counter
+	ble $s6, 0x10, ubarl1
+	la $t1, ($s6)		# t1 = fuel
+ubarlo:	sw $t9, 0($t0)		# Draw the orange
+	addi $t0, $t0, -512
+	addi $t1, $t1, -0x10
+	addi $t2, $t2, 1
+	bge $t1, 0x10, ubarlo
+ubarl1:	blez $t1, ubarla	# Draw partial square
+	addi $t1, $t1, -0x01
+	addi $t7, $t7, 0x110600
+	j ubarl1
+	
+ubarla: sw $t7, 0($t0)		# Draw black
+	addi $t0, $t0, -512
+	addi $t2, $t2, 1 
+ubarl2:	sw $t8, 0($t0)
+	addi $t0, $t0, -512
+	addi $t2, $t2, 1
+	bne $t2, 16, ubarl2
+ubare:	j main1
+	
+dbar:	li $t7, 0x0		# t7 = black
+	li $t8, 0x828282	# t8 = dark grey
+	li $t9, 0xff8800	# t9 = orange
+	addi $t0, $s0, 12280	# t0 = base address
+	sw $t8, 0($t0)
+	sw $t8, 4($t0)
+	addi $t0, $t0, 512
+	li $t1, 0		# t1 = counter
+dbar1:	sw $t8, 0($t0)
+	sw $t7, 4($t0)
+	addi $t0, $t0, 512
+	addi $t1, $t1, 1
+	bne $t1, 16, dbar1
+	sw $t8, 0($t0)
+	sw $t8, 4($t0)
+	sw $t9, -2048($t0)
+	sw $t9, -4096($t0)
+	sw $t9, -6144($t0)
+	
+	jr $ra
+	
 
 
 dsp:	# Draw small platform. Topleft address is stored in $a0. $a0 is not modified
@@ -406,10 +462,9 @@ dland0:	sw $t9 0($t0)		# Draw 6 more horizontal levels
 	addi $t0, $t0, 4
 	j dland0
 dland1:	jr $ra
+
+
 	
-	beq $t2, 0xa4b0c8, mshipc # if color is platform, note it as a colision
-	beq $t2, 0x7e848f, mshipc
-	beq $t2, 0xdf9213, mshipc
 land:	# Return 1 in v0 iff spaceship is landed. Checks $s1 for the ships position. Landed iff neither black or white under both feet
 	lw $t0, 2048($s1)	# Load the pixel under left leg
 	beq $t0, 0xa4b0c8, landtr# Can land on platform or bronze
@@ -490,6 +545,7 @@ mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	beq $t2, 0xa4b0c8, mshipc # if color is platform, note it as a colision
 	beq $t2, 0x7e848f, mshipc
 	beq $t2, 0xdf9213, mshipc
+	beq $t2, 0xfd2f2e, mshipf # if fuel tank, collect fuel
 	j mship3
 mshipc:	addi $s1, $s1, -512	# if collision on feet is detected, raise ship by 1 and resave to draw
 	bgt $t3, 5, mships	# skip move up if on the feet
@@ -511,7 +567,20 @@ mship4:	addi $sp, $sp, 4
 	lw $ra, -4($sp)
 	jr $ra
 	
-	
+mshipf: addi $s6, $s6, 0x80	# collect fuel
+	andi $s6, $s6, 0xFF	# cap fuel
+	addi $t0, $s0, 13964	# fuel location in l1
+	li $t3, 0		# counter
+	li $t4, 0x0
+mshipf1:sw $t4, 0($t0)
+	sw $t4, 4($t0)
+	sw $t4, 8($t0)
+	sw $t4, 12($t0)
+	addi $t3, $t3, 1
+	addi $t0, $t0, 512
+	bne $t3, 5, mshipf1
+	j mships
+
 	
 	
 dbgd:	# Debug print an int
