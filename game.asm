@@ -61,6 +61,7 @@ main:
 	li $s2, 0		# s2 is the sub pixel y position, mod4
 	li $s3, 0		# s3 is the x velocity
 	li $s5, 0		# s5 stores subpixel y velocity
+	jal cBH			# clear behind
 	jal lev0
 
 
@@ -144,8 +145,6 @@ lev0:	# Prepare level 0
 
 	
 	addi $s1, $s0, 28188
-	jal mship
-	jal cBH
 	jal dship
 	
 	lw $t0, 0($sp)
@@ -389,42 +388,39 @@ dfuel:	# Draw a fuel barrel. Topleft address is stored in $a0. $a0 is not modifi
 	jr $ra
 
 dland:	# Draw a landing pad. Topleft address is stored in $a0. $a0 is not modified
-	li $t8, 0x828282	# t8 stores dark grey
-	li $t9, 0xa4a4a4 	# t9 stores light grey
+	li $t9, 0xdf9213 	# t9 stores light grey
 	
-	sw $t8, 0($a0)		# Draw the 6 edge pixels
+	sw $t9, 0($a0)		# Draw the 6 edge pixels
 	sw $t9, 4($a0)
-	sw $t8, 516($a0)
+	sw $t9, 516($a0)
 	sw $t9, 32($a0)
-	sw $t8, 36($a0)
-	sw $t8, 544($a0)
+	sw $t9, 36($a0)
+	sw $t9, 544($a0)
 	
 	addi $t0, $a0, 8
 	li $t1 0
 dland0:	sw $t9 0($t0)		# Draw 6 more horizontal levels
 	sw $t9 512($t0)
-	beq $t1, 6, dland1
+	beq $t1, 5, dland1
 	addi $t1, $t1, 1
 	addi $t0, $t0, 4
 	j dland0
 dland1:	jr $ra
 	
-	
+	beq $t2, 0xa4b0c8, mshipc # if color is platform, note it as a colision
+	beq $t2, 0x7e848f, mshipc
+	beq $t2, 0xdf9213, mshipc
 land:	# Return 1 in v0 iff spaceship is landed. Checks $s1 for the ships position. Landed iff neither black or white under both feet
-	addi $t0, $s1, 2048	# Load the pixel under left leg
-	lw $t0, 0($t0)
-	beqz $t0, land1		# Not landed if white star or black space under foot
-	beq $t0, 0xffffff, land1
-	j landtr
-land1:	addi $t0, $s1, 2048	# Load the pixel under right leg
-	lw $t0, 0($t0)
-	beqz $t0, landfa	# Not landed if white star or black space under foot
-	beq $t0, 0xffffff, landfa
-	j landtr
-
-landfa:	li $v0, 0
+	lw $t0, 2048($s1)	# Load the pixel under left leg
+	beq $t0, 0xa4b0c8, landtr# Can land on platform or bronze
+	beq $t0, 0x7e848f, landtr
+	beq $t0, 0xdf9213, landtr
+	lw $t0, 2060($s1)	# Load the pixel under right leg
+	beq $t0, 0xa4b0c8, landtr
+	beq $t0, 0x7e848f, landtr
+	beq $t0, 0xdf9213, landtr
+	li $v0, 0
 	jr $ra
-	
 landtr: li $v0, 1
 	jr $ra
 	
@@ -476,9 +472,6 @@ mship1:	lw $t1, 0($t0)		# t1 = S[i]
 	bne $t0, $s3, main
 	
 	
-	
-	
-	
 	# Reset if the player is out of screen
 	blt $s1, $s0, main
 	addi $t0, $s0, 31220
@@ -486,14 +479,22 @@ mship1:	lw $t1, 0($t0)		# t1 = S[i]
 	
 	
 	# 2. save the pixels in the new position
-	li $t3, 0		# counter i
+mships:	li $t3, 0		# counter i
 	la $t0, S		# t0 = &S
 	la $t4, BH		# t4 = $BH
+	li $t5, 0		# t5 = 1 otherwise
 mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	add $t2, $s1, $t1	# t2 = &(S[i] pixel)
 	lw $t2, 0($t2)		# t2 = S[i] pixel
 	sw $t2, 0($t4)		# BH[i] = t2
-	addi $t0, $t0, 4
+	beq $t2, 0xa4b0c8, mshipc # if color is platform, note it as a colision
+	beq $t2, 0x7e848f, mshipc
+	beq $t2, 0xdf9213, mshipc
+	j mship3
+mshipc:	addi $s1, $s1, -512	# if collision on feet is detected, raise ship by 1 and resave to draw
+	bgt $t3, 5, mships	# skip move up if on the feet
+	j main			# game-ending collision otherwise
+mship3:	addi $t0, $t0, 4
 	addi $t4, $t4, 4
 	addi $t3, $t3, 1
 	bne $t3,8, mship2
@@ -501,7 +502,12 @@ mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	# 3. draw the ship in the new position
 	jal dship
 	
-	addi $sp, $sp, 4
+	beqz $t5, mship4
+	
+	
+	
+	
+mship4:	addi $sp, $sp, 4
 	lw $ra, -4($sp)
 	jr $ra
 	
