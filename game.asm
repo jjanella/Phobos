@@ -4,12 +4,12 @@
 # CSCB58 Winter 2025 Assembly Final Project
 # University of Toronto, Scarborough
 #
-# Student: Name, Student Number, UTorID, official email
+# Student: Jeremy Janella, 1010412215, janellaj, jeremy.janella@mail.utoronto.ca
 # # Bitmap Display Configuration:
-# - Unit width in pixels: 8 (update this as needed)
-# - Unit height in pixels: 8 (update this as needed)
-# - Display width in pixels: 1024 (update this as needed)
-# - Display height in pixels: 512 (update this as needed)
+# - Unit width in pixels: 8
+# - Unit height in pixels: 8
+# - Display width in pixels: 1024
+# - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestoneshave been reached in this submission?
@@ -38,71 +38,58 @@
 
 
 .data
+ newline: .asciiz "\n"
+ resetting: .asciiz "Starting Main\n"
 
 # Store the offsets from the ship position. First 2 are pod, second 4 are service module, last 2 are legs. 8 pixels total
 S: .word 4 8 516 520 1028 1032 1536 1548
 # Store the screen behind the ship
 BH: .word 0:8
 
-sw $t8, 8($a0)			# Layer 1
-	sw $t8, 12($a0)
-	sw $t8, 516($a0)	# Layer 2
-	sw $t8, 520($a0)
-	sw $t8, 524($a0)
-	sw $t8, 528($a0)
-	sw $t8, 1032($a0)	# Layer 3
-	sw $t8, 1036($a0)
-	sw $t9, 1540($a0)	# Layer 4
-	sw $t9, 1544($a0)
-	sw $t9, 1548($a0)
-	sw $t9, 1552($a0)
-	sw $t7, 2048($a0)	# Layer 5
-	sw $t9, 2052($a0)
-	sw $t9, 2056($a0)
-	sw $t9, 2060($a0)
-	sw $t9, 2064($a0)
-	sw $t7, 2068($a0)
-	sw $t7, 2560($a0)	# Layer 6
-	sw $t7, 2580($a0)
 
 
 
 .eqv BASE_ADDRESS 0x10008000
 .text
 
-.global main
 main:
+	la $a0, resetting
+	li $v0, 4
+	syscall
 	li $s0, BASE_ADDRESS # $s0 stores the base address for display
-	jal cBH
+				# s1 is set later, ship position (including base address)
+	li $s2, 0		# s2 is the sub pixel y position, mod4
+	li $s3, 0		# s3 is the x velocity
+	li $s5, 0		# s5 stores subpixel y velocity
 	jal lev0
-	
-	li $s2, 0		# initial x velocity is 0
-	li $s3, 0		# initial y velocity is 0 (-1 is upwards)
 
-	li $s4,	0
 
-mainl:	# Main Game loop
-	# 
+mainlo:	# Main Game loop
+	# Read if input was sent
 	li $t0, 0xffff0000
 	lw $t1, 0($t0)
-	beq $t1, 1, inp
-main1:	
-	beq $s4, 10, gravity
-main2:
+	beq $t1, 1, inp		# Apply input
+main1:	# Apply gravity to velocity if not landed
+	li $t9, 0xff0000
+	addi $s5, $s5, 1	# Add gravity to vertical velocity
+	jal land
+	beqz $v0, main2		# if not landed: skip
+	blez $s5, main2		# if ascending: skip
+	li $s3, 0
+	li $s5, 0
+	
+main2:	# Draw changes
 	jal mship
 	
-	# Sleep, 50ms, 20Hz
-	li $a0, 50
+	# Sleep, 25ms, 40Hz
+	li $a0, 25
 	li $v0, 32
 	syscall
 	
-	addi $s4, $s4, 1
-	j mainl
-	
-gravity:# Apply gravity
-	addi $s3, $s3, 1
-	li $s4, 0
-	j main2
+	j mainlo
+
+
+
 
 inp:	# Handle input
 	lw $t0, 4($t0)		# t0 = ascii code of input
@@ -115,15 +102,15 @@ inp:	# Handle input
 	j main1			# return to main loop
 
 inpa:	# accelerate left is pushed
-	addi $s2, $s2, -1
+	addi $s3, $s3, -4
 	j main1
 
-inpw:	# accelerate up is pushed
-	addi $s3, $s3, -1
+inpw:	# increase thrust is pushed
+	addi $s5, $s5, -32
 	j main1
 
 inpd:	# accelerate right is pushed
-	addi $s2, $s2, 1
+	addi $s3, $s3, 4
 	j main1
 
 inpr:# reset if r if pressed
@@ -154,24 +141,26 @@ lev0:	# Prepare level 0
 	jal dtur
 	addi $a0, $s0, 30220	# Draw medium platform
 	jal dmp
+
 	
-	addi $s1, $s0, 28184	# s1 stores the players position. 27984 is spawn
+	addi $s1, $s0, 28188
+	jal mship
+	jal cBH
 	jal dship
 	
 	lw $t0, 0($sp)
 	addi $sp, $sp, 4	# Return to main from the stack
 	jr $t0
 
-cBH:	# Clean bheind ship buffer
+cBH:	# Clean behind ship buffer
 	la $t0, BH		# &B[i]
 	li $t1, 0		# Counter
-	sw 0x0, 0($t0)		# B[i] = black
+	li $t9, 0		# Draw black into the behind ship buffer
+cBH1:	sw $t9, 0($t0)		# B[i] = black
 	addi $t1, $t1, 1
 	addi $t0, $t0, 4
-	beq $t1, 8, cBH1
-cBH1:	jr $ra
-	
-	
+	bne $t1, 8, cBH1
+cBH2:	jr $ra
 
 
 ss:	# Set the screen
@@ -422,11 +411,13 @@ dland1:	jr $ra
 	
 	
 land:	# Return 1 in v0 iff spaceship is landed. Checks $s1 for the ships position. Landed iff neither black or white under both feet
-	addi $t0, $s1, 3056	# Load the pixel under left leg
+	addi $t0, $s1, 2048	# Load the pixel under left leg
+	lw $t0, 0($t0)
 	beqz $t0, land1		# Not landed if white star or black space under foot
 	beq $t0, 0xffffff, land1
 	j landtr
-land1:	addi $t0, $s1, 3076	# Load the pixel under right leg
+land1:	addi $t0, $s1, 2048	# Load the pixel under right leg
+	lw $t0, 0($t0)
 	beqz $t0, landfa	# Not landed if white star or black space under foot
 	beq $t0, 0xffffff, landfa
 	j landtr
@@ -436,7 +427,6 @@ landfa:	li $v0, 0
 	
 landtr: li $v0, 1
 	jr $ra
-	
 	
 	
 mship	: # move the ship (in $s1) by ($a0, $a1). 
@@ -461,16 +451,39 @@ mship1:	lw $t1, 0($t0)		# t1 = S[i]
 	addi $t3, $t3, 1
 	bne $t3, 8, mship1
 		
-	# Calculate the new position
-	sll $t0, $s2, 2
+	# X before move
+	sub $t5, $s1, $s0
+	andi $t5, $t5, 511
+	bge $t5, 500, main
+	
+	
+	# Calculate the new position, vert velocity is 1/32 as fast as whatever is stored to allow more granularity
+	add $s1, $s1, $s3	# position accumulates x velocity
+	
+	add $s2, $s2, $s5	# y subpix pos += y subpix vel
+	andi $t0, $s2, 0xffffffe0
+	andi $s2, $s2, 0x0000001f 
+	sll $t0, $t0, 4
 	add $s1, $s1, $t0
-	sll $t0, $s3, 9
-	add $s1, $s1, $t0
+	
+	# X after move
+	sub $t6, $s1, $s0
+	andi $t6, $t6, 511
+	bge $t6, 500, main
+	
+	# Difference should equal x velocity, otherwise hit an edge
+	sub $t0, $t6, $t5
+	bne $t0, $s3, main
+	
+	
+	
+	
 	
 	# Reset if the player is out of screen
 	blt $s1, $s0, main
-	addi $t0, $s0, 29696
+	addi $t0, $s0, 31220
 	bgt $s1, $t0, main
+	
 	
 	# 2. save the pixels in the new position
 	li $t3, 0		# counter i
@@ -495,11 +508,13 @@ mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	
 	
 	
-	
-	
-	
-	
-	
+dbgd:	# Debug print an int
+	li $v0, 1
+	syscall
+	la $a0, newline
+	li $v0, 4
+	syscall
+	jr $ra
 	
 	
 	
