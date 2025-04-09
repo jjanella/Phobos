@@ -80,7 +80,8 @@ main1:	# Apply gravity to velocity if not landed
 	li $s3, 0
 	li $s5, 0
 	bgtz $s6, main2		# if fuel remains: skip
-	j main			# yer done - no fuel
+	li $a0, 2
+	j dsc			# yer done - no fuel
 	
 main2:	# Draw changes
 	jal mship
@@ -467,17 +468,323 @@ dland1:	jr $ra
 	
 land:	# Return 1 in v0 iff spaceship is landed. Checks $s1 for the ships position. Landed iff neither black or white under both feet
 	lw $t0, 2048($s1)	# Load the pixel under left leg
+	lw $t1, 2060($s1)	# Load the pixel under right leg
+	beq $t0, 0xdf9213, landw # Win land true if on bronze
+	beq $t1, 0xdf9213, landw
 	beq $t0, 0xa4b0c8, landtr# Can land on platform or bronze
 	beq $t0, 0x7e848f, landtr
-	beq $t0, 0xdf9213, landtr
-	lw $t0, 2060($s1)	# Load the pixel under right leg
-	beq $t0, 0xa4b0c8, landtr
-	beq $t0, 0x7e848f, landtr
-	beq $t0, 0xdf9213, landtr
+	beq $t1, 0xa4b0c8, landtr
+	beq $t1, 0x7e848f, landtr
 	li $v0, 0
 	jr $ra
 landtr: li $v0, 1
 	jr $ra
+
+landw:# Handle landing on the win platform
+	li $a0, 0
+	j dsc
+
+
+dsc:	# Draw the final screen with fuel score in the background. a0=0-passed 1-kia 2-mia
+	addi $sp, $sp, -4	# Store ra
+	sw $ra, 0($sp)
+	addi $t0, $s0, 11964	# t0 = base address
+	li $t7, 0xffffff	# t7 = white
+	
+	la $a1, ($t0)
+	la $a2, ($t7)
+	jal dscrow
+	
+	
+	addi $t0, $t0, 512
+		
+	li $t1, 0		# counter
+dsc1:	la $a1, ($t0)		# pass address
+	li $a2, 0x0		# default black
+	bnez $a0, dsc2		# fancy if passed
+	lw $a2, 320($t0)	# copy the color from the far right bar at the same height lol
+dsc2:	jal dscrow
+	addi $t0, $t0, 512
+	addi $t1, $t1, 1
+	bne $t1, 16, dsc1
+	
+	la $a1, ($t0)
+	la $a2, ($t7)
+	jal dscrow
+	
+	beq $a0, 0, dscmp
+	beq $a0, 1, dsck
+	beq $a0, 2, dscm
+	
+	
+dsc3:	li $v0, 10
+	syscall
+
+	lw $ra, 0($sp)		# load ra and jump back
+	addi $sp, $sp, 4
+	jr $ra
+
+
+dscrow:	# Draws a row at a1 on the win screen, filling with color a2
+	sw $t7, 0($a1)
+	li $t6, 0
+	li $t6, 1		# counter
+dscrow1:addi $a1, $a1, 4
+	addi $t6, $t6, 1
+	sw $a2, 0($a1)
+	bne $t6, 33, dscrow1
+	sw $t7, 4($a1)
+	
+	jr $ra
+
+dscm:	# Draw MIA 
+	addi $t1, $s0, 11964
+	li $t0, 0xffffff	# Text color
+	sw $t0, 3624($t1)	# Layer 1
+	sw $t0, 3640($t1)
+	sw $t0, 3648($t1)
+	sw $t0, 3652($t1)
+	sw $t0, 3656($t1)
+	sw $t0, 3664($t1)
+	sw $t0, 3668($t1)
+	sw $t0, 3672($t1)
+	
+	sw $t0, 4136($t1)	# Layer 2
+	sw $t0, 4140($t1)
+	sw $t0, 4148($t1)
+	sw $t0, 4152($t1)
+	sw $t0, 4164($t1)
+	sw $t0, 4176($t1)
+	sw $t0, 4184($t1)
+	
+	sw $t0, 4648($t1)	# Layer 3
+	sw $t0, 4656($t1)
+	sw $t0, 4664($t1)
+	sw $t0, 4676($t1)
+	sw $t0, 4688($t1)
+	sw $t0, 4692($t1)
+	sw $t0, 4696($t1)
+	
+	sw $t0, 5160($t1)	# Layer 4
+	sw $t0, 5176($t1)
+	sw $t0, 5188($t1)
+	sw $t0, 5200($t1)
+	sw $t0, 5208($t1)
+	
+	sw $t0, 5672($t1)	# Layer 5
+	sw $t0, 5688($t1)
+	sw $t0, 5696($t1)
+	sw $t0, 5700($t1)
+	sw $t0, 5704($t1)
+	sw $t0, 5712($t1)
+	sw $t0, 5720($t1)
+	
+	j dsc3
+
+
+dsck:	# Draw KIA 
+	addi $t1, $s0, 11964
+	li $t0, 0xffffff	# Text color
+	sw $t0, 3628($t1)	# Layer 1
+	sw $t0, 3640($t1)
+	sw $t0, 3648($t1)
+	sw $t0, 3652($t1)
+	sw $t0, 3656($t1)
+	sw $t0, 3664($t1)
+	sw $t0, 3668($t1)
+	sw $t0, 3672($t1)
+	
+	sw $t0, 4140($t1)	# Layer 2
+	sw $t0, 4148($t1)
+	sw $t0, 4164($t1)
+	sw $t0, 4176($t1)
+	sw $t0, 4184($t1)
+	
+	sw $t0, 4652($t1)	# Layer 3
+	sw $t0, 4656($t1)
+	sw $t0, 4676($t1)
+	sw $t0, 4688($t1)
+	sw $t0, 4692($t1)
+	sw $t0, 4696($t1)
+	
+	sw $t0, 5164($t1)	# Layer 4
+	sw $t0, 5172($t1)
+	sw $t0, 5188($t1)
+	sw $t0, 5200($t1)
+	sw $t0, 5208($t1)
+	
+	sw $t0, 5676($t1)	# Layer 5
+	sw $t0, 5688($t1)
+	sw $t0, 5696($t1)
+	sw $t0, 5700($t1)
+	sw $t0, 5704($t1)
+	sw $t0, 5712($t1)
+	sw $t0, 5720($t1)
+	
+	j dsc3
+	
+	
+dscmp:	# Draws mission passed onto the screen
+	addi $t1, $s0, 11964
+	li $t0, 0xffffff	# Text color
+	sw $t0, 1544($t1)	# Layer 1
+	sw $t0, 1560($t1)
+	sw $t0, 1568($t1)
+	sw $t0, 1572($t1)
+	sw $t0, 1576($t1)
+	sw $t0, 1584($t1)
+	sw $t0, 1588($t1)
+	sw $t0, 1592($t1)
+	sw $t0, 1600($t1)
+	sw $t0, 1604($t1)
+	sw $t0, 1608($t1)
+	sw $t0, 1616($t1)
+	sw $t0, 1620($t1)
+	sw $t0, 1624($t1)
+	sw $t0, 1632($t1)
+	sw $t0, 1636($t1)
+	sw $t0, 1640($t1)
+	sw $t0, 1648($t1)
+	sw $t0, 1660($t1)
+	
+	sw $t0, 2056($t1)	# Layer 2
+	sw $t0, 2060($t1)
+	sw $t0, 2068($t1)
+	sw $t0, 2072($t1)
+	sw $t0, 2084($t1)
+	sw $t0, 2096($t1)
+	sw $t0, 2112($t1)
+	sw $t0, 2132($t1)
+	sw $t0, 2144($t1)
+	sw $t0, 2152($t1)
+	sw $t0, 2160($t1)
+	sw $t0, 2164($t1)
+	sw $t0, 2172($t1)
+	
+	sw $t0, 2568($t1)	# Layer 3
+	sw $t0, 2576($t1)
+	sw $t0, 2584($t1)
+	sw $t0, 2596($t1)
+	sw $t0, 2608($t1)
+	sw $t0, 2612($t1)
+	sw $t0, 2616($t1)
+	sw $t0, 2624($t1)
+	sw $t0, 2628($t1)
+	sw $t0, 2632($t1)
+	sw $t0, 2644($t1)
+	sw $t0, 2656($t1)
+	sw $t0, 2664($t1)
+	sw $t0, 2672($t1)
+	sw $t0, 2676($t1)
+	sw $t0, 2680($t1)
+	sw $t0, 2684($t1)
+	
+	sw $t0, 3080($t1)	# Layer 4
+	sw $t0, 3096($t1)
+	sw $t0, 3108($t1)
+	sw $t0, 3128($t1)
+	sw $t0, 3144($t1)
+	sw $t0, 3156($t1)
+	sw $t0, 3168($t1)
+	sw $t0, 3176($t1)
+	sw $t0, 3184($t1)
+	sw $t0, 3192($t1)
+	sw $t0, 3196($t1)
+
+	sw $t0, 3592($t1)	# Layer 5
+	sw $t0, 3608($t1)
+	sw $t0, 3616($t1)
+	sw $t0, 3620($t1)
+	sw $t0, 3624($t1)
+	sw $t0, 3632($t1)
+	sw $t0, 3636($t1)
+	sw $t0, 3640($t1)
+	sw $t0, 3648($t1)
+	sw $t0, 3652($t1)
+	sw $t0, 3656($t1)
+	sw $t0, 3664($t1)
+	sw $t0, 3668($t1)
+	sw $t0, 3672($t1)
+	sw $t0, 3680($t1)
+	sw $t0, 3684($t1)
+	sw $t0, 3688($t1)
+	sw $t0, 3696($t1)
+	sw $t0, 3708($t1)
+
+	sw $t0, 5144($t1)	# Layer 6
+	sw $t0, 5148($t1)
+	sw $t0, 5152($t1)
+	sw $t0, 5160($t1)
+	sw $t0, 5164($t1)
+	sw $t0, 5168($t1)
+	sw $t0, 5176($t1)
+	sw $t0, 5180($t1)
+	sw $t0, 5184($t1)
+	sw $t0, 5192($t1)
+	sw $t0, 5196($t1)
+	sw $t0, 5200($t1)
+	sw $t0, 5208($t1)
+	sw $t0, 5212($t1)
+	sw $t0, 5216($t1)
+	sw $t0, 5224($t1)
+	sw $t0, 5228($t1)
+	
+	sw $t0, 5656($t1)	# Layer 7
+	sw $t0, 5664($t1)
+	sw $t0, 5672($t1)
+	sw $t0, 5680($t1)
+	sw $t0, 5688($t1)
+	sw $t0, 5704($t1)
+	sw $t0, 5720($t1)
+	sw $t0, 5736($t1)
+	sw $t0, 5744($t1)
+	
+	sw $t0, 6168($t1)	# Layer 8
+	sw $t0, 6172($t1)
+	sw $t0, 6176($t1)
+	sw $t0, 6184($t1)
+	sw $t0, 6188($t1)
+	sw $t0, 6192($t1)
+	sw $t0, 6200($t1)
+	sw $t0, 6204($t1)
+	sw $t0, 6208($t1)
+	sw $t0, 6216($t1)
+	sw $t0, 6220($t1)
+	sw $t0, 6224($t1)
+	sw $t0, 6232($t1)
+	sw $t0, 6236($t1)
+	sw $t0, 6248($t1)
+	sw $t0, 6256($t1)
+	
+	sw $t0, 6680($t1)	# Layer 9
+	sw $t0, 6696($t1)
+	sw $t0, 6704($t1)
+	sw $t0, 6720($t1)
+	sw $t0, 6736($t1)
+	sw $t0, 6744($t1)
+	sw $t0, 6760($t1)
+	sw $t0, 6768($t1)
+
+	sw $t0, 7192($t1)	# Layer 10
+	sw $t0, 7208($t1)
+	sw $t0, 7216($t1)
+	sw $t0, 7224($t1)
+	sw $t0, 7228($t1)
+	sw $t0, 7232($t1)
+	sw $t0, 7240($t1)
+	sw $t0, 7244($t1)
+	sw $t0, 7248($t1)
+	sw $t0, 7256($t1)
+	sw $t0, 7260($t1)
+	sw $t0, 7264($t1)
+	sw $t0, 7272($t1)
+	sw $t0, 7276($t1)
+	
+	j dsc3
+	
+	
+	
+
 	
 	
 mship	: # move the ship (in $s1) by ($a0, $a1). 
@@ -518,19 +825,20 @@ mship1:	lw $t1, 0($t0)		# t1 = S[i]
 	add $s1, $s1, $t0
 	
 	# X after move
+	li $a0, 2		# premeptive if out of screen
 	sub $t6, $s1, $s0
 	andi $t6, $t6, 511
-	bge $t6, 500, main
+	bge $t6, 500, dsc
 	
 	# Difference should equal x velocity, otherwise hit an edge
 	sub $t0, $t6, $t5
-	bne $t0, $s3, main
+	bne $t0, $s3, dsc	# MIA
 	
 	
 	# Reset if the player is out of screen
-	blt $s1, $s0, main
+	blt $s1, $s0, dsc
 	addi $t0, $s0, 31220
-	bgt $s1, $t0, main
+	bgt $s1, $t0, dsc
 	
 	
 	# 2. save the pixels in the new position
@@ -549,7 +857,9 @@ mship2:	lw $t1, 0($t0)		# t1 = S[i]
 	j mship3
 mshipc:	addi $s1, $s1, -512	# if collision on feet is detected, raise ship by 1 and resave to draw
 	bgt $t3, 5, mships	# skip move up if on the feet
-	j main			# game-ending collision otherwise
+	addi $sp, $sp, 4
+	li $a0, 1
+	j dsc			# game-ending collision otherwise
 mship3:	addi $t0, $t0, 4
 	addi $t4, $t4, 4
 	addi $t3, $t3, 1
