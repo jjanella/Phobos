@@ -57,15 +57,17 @@ main:
 	li $v0, 4
 	syscall
 	li $s0, BASE_ADDRESS # $s0 stores the base address for display
+	
+	addi $s1, $s0, 28188	# initial spawn location
 				# s1 is set later, ship position (including base address)
 	li $s2, 0		# s2 is the sub pixel y position, mod4
 	li $s3, 0		# s3 is the x velocity
+	li $s4, 0		# s4 is the current level
 	li $s5, 0		# s5 stores subpixel y velocity
 	li $s6, 0x80		# initial fuel = 8*16 / 16*16 - 1
-	jal cBH			# clear behind
+	jal cBH			# clear behind the ship
+	
 	jal lev0
-	jal dbar		# draw bar ui
-
 
 mainlo:	# Main Game loop
 	# Read if input was sent
@@ -93,6 +95,16 @@ main2:	# Draw changes
 	
 	j mainlo
 
+winp:	# Wait for input restart or quit
+	li $a0, 100
+	li $v0, 32
+	li $t0, 0xffff0000
+	lw $t1, 0($t0)
+	beqz $t1, winp		# Apply input
+	lw $t0, 4($t0)			# t0 = Ascii 
+	beq $t0, 114, inpr
+	beq $t0, 113, inpq
+	j winp
 
 
 
@@ -110,17 +122,20 @@ inp:	# Handle input
 inpa:	# accelerate left is pushed
 	addi $s3, $s3, -4
 	addi $s6, $s6, -4
-	j ubar
+	jal ubar
+	j mainlo
 
 inpw:	# increase thrust is pushed
 	addi $s5, $s5, -32
 	addi $s6, $s6, -8
-	j ubar
+	jal ubar
+	j mainlo
 
 inpd:	# accelerate right is pushed
 	addi $s3, $s3, 4
 	addi $s6, $s6, -4
-	j ubar
+	jal ubar
+	j mainlo
 
 inpr:# reset if r if pressed
 	j main
@@ -130,15 +145,13 @@ inpq:# Exit if q if pressed
 	syscall
 
 lev0:	# Prepare level 0
-	
-	addi $sp, $sp -4	# Save the address to return to main
-	sw $ra, 0($sp)
-	
 	la $a0, ($s0)
 	jal ss			# Clear the screen
+	
 	addi $a0, $s0, 27900	# Draw the large platform
 	jal dlp
 	addi $a0, $s0, 27088	# Draw a landing pad on the large platform
+	li $a1, 0xdf9213	# Success color
 	jal dland
 	addi $a0, $s0, 16512	# Draw small platform 1
 	jal dsp
@@ -150,14 +163,60 @@ lev0:	# Prepare level 0
 	jal dtur
 	addi $a0, $s0, 30220	# Draw medium platform
 	jal dmp
+	j mainlo
 
+lev1:	# Prepare level 1
 	
-	addi $s1, $s0, 28188
-	jal dship
+	la $a0, ($s0)
+	jal ss			# Clear the screen
+	addi $a0, $s0, 27900	# Draw the large platform
+	jal dlp
+	addi $a0, $s0, 27088	# Draw a landing pad on the large platform
+	li $a1, 0x7e848f	# Start color
+	jal dland
 	
-	lw $t0, 0($sp)
-	addi $sp, $sp, 4	# Return to main from the stack
-	jr $t0
+	addi $a0, $s0, 15400	# Draw small platform
+	jal dsp
+	addi $a0, $s0, 25620	# Draw small platform
+	jal dsp
+	addi $a0, $s0, 14276	# Draw turret
+	jal dtur
+	addi $a0, $s0, 15800	# Draw medium platform
+	jal dmp
+	addi $a0, $s0, 23072 	# Draw fuel
+	jal dfuel
+	addi $a0, $s0, 15400	# Draw a landing pad on the small platform
+	li $a1, 0xdf9213	# Succes color
+	jal dland
+	j mainlo
+
+lev2:	# Prepare level 2
+	
+	la $a0, ($s0)
+	jal ss			# Clear the screen
+	addi $a0, $s0, 4860	# Draw the large platform
+	jal dlp
+	addi $a0, $s0, 15400	# Draw small platform
+	jal dsp
+	li $a1, 0x7e848f	# Start color
+	addi $a0, $s0, 15400	# Draw a landing pad
+	jal dland
+	
+	li $a1, 0xdf9213	# Succes color
+	addi $a0, $s0, 11164	# Draw a landing pad
+	jal dland
+	
+	addi $a0, $s0, 5600	# Draw small platform
+	#jal dsp
+	addi $a0, $s0, 4348	# Draw turret
+	#jal dtur
+	addi $a0, $s0, 20720	# Draw medium platform
+	jal dmp
+	addi $a0, $s0, 2300 	# Draw fuel
+	jal dfuel
+	#jal dland
+	j mainlo
+
 
 cBH:	# Clean behind ship buffer
 	la $t0, BH		# &B[i]
@@ -176,17 +235,16 @@ ss:	# Set the screen
 ssl:	add $t1, $t0, $a0
 	sw ,$t9, ($t1)
 	addi $t0, $t0, 4
-	beq $t0, 32768, ss0
+	beq $t0, 32768, dbar	# draw bar ui
 	j ssl
-ss0:	jr $ra
 
 ubar:	# update the fuel bar
-	li $t7, 0		# partial square color
+	li $t7, 0x002e00	# partial square color
 	li $t8, 0x0		# t8 = black
 	li $t9, 0xff8800	# t9 = orange
-	add $t0, $s0, 20476	# bottom of guage
+	add $t0, $s0, 20476	# bottom of gauge
 	li $t2, 0		# counter
-	ble $s6, 0x10, ubarl1
+	blt $s6, 0x10, ubarl1
 	la $t1, ($s6)		# t1 = fuel
 ubarlo:	sw $t9, 0($t0)		# Draw the orange
 	addi $t0, $t0, -512
@@ -198,14 +256,17 @@ ubarl1:	blez $t1, ubarla	# Draw partial square
 	addi $t7, $t7, 0x110600
 	j ubarl1
 	
-ubarla: sw $t7, 0($t0)		# Draw black
+ubarla: bge $t2, 16, ubare
+	beq $t7, 0x113400, ubarl2
+	sw $t7, 0($t0)		# Draw partial
 	addi $t0, $t0, -512
 	addi $t2, $t2, 1 
-ubarl2:	sw $t8, 0($t0)
+ubarl2:	bge $t2, 16, ubare
+	sw $t8, 0($t0)
 	addi $t0, $t0, -512
 	addi $t2, $t2, 1
-	bne $t2, 16, ubarl2
-ubare:	j main1
+	blt $t2, 16, ubarl2
+ubare:	jr $ra
 	
 dbar:	li $t7, 0x0		# t7 = black
 	li $t8, 0x828282	# t8 = dark grey
@@ -226,7 +287,7 @@ dbar1:	sw $t8, 0($t0)
 	sw $t9, -4096($t0)
 	sw $t9, -6144($t0)
 	
-	jr $ra
+	j ubar		# update the bar then enter the gameloop
 	
 
 
@@ -445,7 +506,7 @@ dfuel:	# Draw a fuel barrel. Topleft address is stored in $a0. $a0 is not modifi
 	jr $ra
 
 dland:	# Draw a landing pad. Topleft address is stored in $a0. $a0 is not modified
-	li $t9, 0xdf9213 	# t9 stores light grey
+	la $t9, ($a1)	 	# t9 stores light grey
 	
 	sw $t9, 0($a0)		# Draw the 6 edge pixels
 	sw $t9, 4($a0)
@@ -481,15 +542,15 @@ landtr: li $v0, 1
 	jr $ra
 
 landw:# Handle landing on the win platform
+	bne $s4, 2, dsc4	# if level 2 dont bother with the menus
 	li $a0, 0
 	j dsc
 
 
 dsc:	# Draw the final screen with fuel score in the background. a0=0-passed 1-kia 2-mia
-	addi $sp, $sp, -4	# Store ra
-	sw $ra, 0($sp)
 	addi $t0, $s0, 11964	# t0 = base address
 	li $t7, 0xffffff	# t7 = white
+	
 	
 	la $a1, ($t0)
 	la $a2, ($t7)
@@ -512,17 +573,20 @@ dsc2:	jal dscrow
 	la $a2, ($t7)
 	jal dscrow
 	
+	
 	beq $a0, 0, dscmp
 	beq $a0, 1, dsck
 	beq $a0, 2, dscm
 	
 	
-dsc3:	li $v0, 10
-	syscall
-
-	lw $ra, 0($sp)		# load ra and jump back
-	addi $sp, $sp, 4
-	jr $ra
+dsc3:	beqz $a0, dsc4		
+	j winp			# return back to reset if anything but a win
+dsc4:	addi $s4, $s4, 1	# draw next level if passed
+	beq $s4, 1 lev1
+	beq $s4, 2 lev2
+	j winp
+	
+	
 
 
 dscrow:	# Draws a row at a1 on the win screen, filling with color a2
@@ -878,9 +942,15 @@ mship4:	addi $sp, $sp, 4
 	jr $ra
 	
 mshipf: addi $s6, $s6, 0x80	# collect fuel
-	andi $s6, $s6, 0xFF	# cap fuel
-	addi $t0, $s0, 13964	# fuel location in l1
-	li $t3, 0		# counter
+	ble $s6, 0xFF, mshipl
+	li $s6, 0xFF		# cap fuel
+mshipl:	addi $t0, $s0, 13964	# fuel location in l1
+	beq $s4, 0, mshipf0	# level 0 fuel pos
+	addi $t0, $s0, 23072
+	beq $s4, 1, mshipf0	# level 1 fuel pos
+	addi $t0, $s0, 2300
+	beq $s4, 2, mshipf0	# level 2 fuel pos
+mshipf0:li $t3, 0		# counter
 	li $t4, 0x0
 mshipf1:sw $t4, 0($t0)
 	sw $t4, 4($t0)
@@ -889,6 +959,7 @@ mshipf1:sw $t4, 0($t0)
 	addi $t3, $t3, 1
 	addi $t0, $t0, 512
 	bne $t3, 5, mshipf1
+	jal ubar
 	j mships
 
 	
@@ -901,6 +972,8 @@ dbgd:	# Debug print an int
 	syscall
 	jr $ra
 	
+
+
 	
 	
 	
