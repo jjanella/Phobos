@@ -13,21 +13,26 @@
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestoneshave been reached in this submission?
-# (See the assignment handout for descriptions of the milestones)
-# - Milestone 1/2/3/4 (choose the one the applies)
+# - Milestone All
 #
-# Which approved features have been implemented for milestone 3?
+# Which approved features have been implemented for milestone 4?
 # (See the assignment handout for the list of additional features)
-# 1. (fill in the feature, if any)
-# 2. (fill in the feature, if any)
-# 3. (fill in the feature, if any)
-# ... (add more if necessary)
+# 1. Enemies shoot back
+# 2. Levels
+# 3. Shoot enemies  (with the thruster (on the lighter color))
+# 4. Moving/hiding platforms (between levels)
 # # Link to video demonstration for final submission:
-# - (insert YouTube / MyMedia / other URL here). Make sure we can view it!
-# # Are you OK with us sharing the video with people outside course staff? # - yes / no / yes, and please share this project github link as well!
+#	
+# 	https://github.com/jjanella/Phobos
+# # Are you OK with us sharing the video with people outside course staff? # yes 
 # # Any additional information that the TA needs to know:
-# - (write here, if any)
+# - 	The menus have a bug where pressing r/q is delayed - this is soemthing wrong with mars 
+#	because the code has no issues, there is just input delay freezes. The code in question
+# 	is from the winp: tag to the first branch after it. 
 #
+# - 	Legs dont take collision damage from terrain, only the body
+#
+# -	The last fuel barell is very hard to get but its not needed to win
 #####################################################################
 
 
@@ -148,7 +153,7 @@ turd: 	# "Turret detected"
 	beq $s4 0 ktur
 	addi $a0 $s0 14276
 	beq $s4 1 ktur
-	addi $a0 $s0 19204
+	addi $a0 $s0 21252
 	beq $s4 2 ktur
 	j main3			# this line should never be reached
 	
@@ -161,18 +166,12 @@ main3:	# Draw changes
 	j mainlo
 
 winp:	# Wait for input restart or quit
-	li $a0 1
-	li $v0 1
-	syscall
 	li $a0, 100
 	li $v0, 32
 	syscall
 	li $t0, 0xffff0000
 	lw $t1, 0($t0)
-	beqz $t1, winp		# Apply input	
-	li $a0 2
-	li $v0 1
-	syscall
+	beqz $t1, winp		# Apply input
 	lw $t0, 4($t0)		# t0 = Ascii 
 	beq $t0, 114, winpr
 	beq $t0, 113, winpq
@@ -294,17 +293,17 @@ lev2:	# Prepare level 2
 	addi $a0, $s0, 15400	# Draw a landing pad
 	jal dland
 	
+	addi $a0, $s0, 11164	# Draw small platform
+	jal dsp
 	li $a1, 0xdf9213	# Succes color
 	addi $a0, $s0, 11164	# Draw a landing pad
 	jal dland
 	
-	addi $a0, $s0, 5600	# Draw small platform
-	#jal dsp
-	addi $a0, $s0, 20720	# Draw medium platform
+	addi $a0, $s0, 22768	# Draw medium platform
 	jal dmp
-	addi $a0, $s0, 19204	# Draw turret
+	addi $a0, $s0, 21252	# Draw turret
 	jal dtur
-	addi $s7, $s0, 19712	# Set the bullets positon and spawn
+	addi $s7, $s0, 21760	# Set the bullets positon and spawn
 	sw $s7, bSpawn
 	addi $a0, $s0, 2300 	# Draw fuel
 	jal dfuel
