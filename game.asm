@@ -39,13 +39,18 @@
 
 .data
  newline: .asciiz "\n"
- resetting: .asciiz "Starting Main\n"
 
 # Store the offsets from the ship position. First 2 are pod, second 4 are service module, last 2 are legs. 8 pixels total
 S: .word 4 8 516 520 1028 1032 1536 1548
+bSpawn: .word 0
 # Store the screen behind the ship
 BH: .word 0:8
+# Store the screen behind the plume
+BHP: .word 0:8
+PLMPOS: .word 0		# psoition of the plume
+EPLM: .word 0		# should erase the plume?
 
+DESTROYED: .word 0	# keeps track of if the enemy is destoryed
 
 
 
@@ -53,9 +58,6 @@ BH: .word 0:8
 .text
 
 main:
-	la $a0, resetting
-	li $v0, 4
-	syscall
 	li $s0, BASE_ADDRESS # $s0 stores the base address for display
 	
 	addi $s1, $s0, 28188	# initial spawn location
@@ -85,27 +87,103 @@ main1:	# Apply gravity to velocity if not landed
 	li $a0, 2
 	j dsc			# yer done - no fuel
 	
-main2:	# Draw changes
-	jal mship
+main2:	
 	
 	# Sleep, 25ms, 40Hz
 	li $a0, 25
 	li $v0, 32
 	syscall
 	
+	# Erase plume if instructed
+	la $t0 EPLM
+	lw $t1 0($t0)
+	beqz $t1 main3
+	li $t1 0		# Reset instruction
+	sw $t1, 0($t0)
+	
+	
+	# Redraw the bakcground
+	lw $t1, PLMPOS
+	lw $t0 BHP		# Layer 1
+	sw $t0 1540($t1)
+	lw $t0 BHP+4
+	sw $t0 1544($t1)
+	addi $t2, $s0, 31220
+	bgt $t1, $t2, main3
+	
+	lw $t0 BHP+8		# Layer 2
+	sw $t0 2052($t1)	
+	lw $t0 BHP+12
+	sw $t0 2056($t1)
+	addi $t2, $t2, -512
+	bgt $t1, $t2, main3
+	
+	lw $t0 BHP+16		# Layer 3
+	sw $t0 2564($t1)	
+	lw $t0 BHP+20
+	sw $t0 2568($t1)
+	addi $t2, $t2, -512
+	bgt $t1, $t2, main3
+	
+	lw $t0 BHP+24		# Layer 4
+	sw $t0 3076($t1)	
+	lw $t0 BHP+28
+	sw $t0 3080($t1)
+	
+	# Check if turret is destroyed
+	li $t9, 0xa4a4a4 	# t9 stores light grey for detecting turret
+	li $t0 0
+	
+maindl:	lw $t1 BHP($t0)
+	beq $t1 $t9 turd
+	addi $t0 $t0 4
+	bne $t0 32 maindl
+	
+
+	j main3
+turd: 	# "Turret detected"
+	li $t0 1
+	sw $t0 DESTROYED
+	addi $a0 $s0 21400
+	beq $s4 0 ktur
+	addi $a0 $s0 14276
+	beq $s4 1 ktur
+	addi $a0 $s0 19204
+	beq $s4 2 ktur
+	j main3			# this line should never be reached
+	
+
+
+main3:	# Draw changes
+	jal dbul
+	jal mship
+	
 	j mainlo
 
 winp:	# Wait for input restart or quit
+	li $a0 1
+	li $v0 1
+	syscall
 	li $a0, 100
 	li $v0, 32
+	syscall
 	li $t0, 0xffff0000
 	lw $t1, 0($t0)
-	beqz $t1, winp		# Apply input
-	lw $t0, 4($t0)			# t0 = Ascii 
-	beq $t0, 114, inpr
-	beq $t0, 113, inpq
+	beqz $t1, winp		# Apply input	
+	li $a0 2
+	li $v0 1
+	syscall
+	lw $t0, 4($t0)		# t0 = Ascii 
+	beq $t0, 114, winpr
+	beq $t0, 113, winpq
 	j winp
 
+winpr:# reset if r if pressed
+	j main
+	
+winpq:# Exit if q if pressed
+	li $v0, 10 # terminate the program gracefully
+	syscall
 
 
 inp:	# Handle input
@@ -129,6 +207,13 @@ inpw:	# increase thrust is pushed
 	addi $s5, $s5, -32
 	addi $s6, $s6, -8
 	jal ubar
+	blez $s6 mainlo	# skip plume if no fuel
+	
+	jal dplm	# notify mainloop to clear plume
+	li $t0 1	
+	sw $t0, EPLM
+	sw $s1, PLMPOS
+	
 	j mainlo
 
 inpd:	# accelerate right is pushed
@@ -145,6 +230,7 @@ inpq:# Exit if q if pressed
 	syscall
 
 lev0:	# Prepare level 0
+	sw $zero DESTROYED
 	la $a0, ($s0)
 	jal ss			# Clear the screen
 	
@@ -163,9 +249,12 @@ lev0:	# Prepare level 0
 	jal dtur
 	addi $a0, $s0, 30220	# Draw medium platform
 	jal dmp
+	addi $s7, $s0, 21908	# Set the bullets positon and spawn
+	sw $s7, bSpawn
 	j mainlo
 
 lev1:	# Prepare level 1
+	sw $zero DESTROYED
 	
 	la $a0, ($s0)
 	jal ss			# Clear the screen
@@ -181,6 +270,8 @@ lev1:	# Prepare level 1
 	jal dsp
 	addi $a0, $s0, 14276	# Draw turret
 	jal dtur
+	addi $s7, $s0, 14784	# Set the bullets positon and spawn
+	sw $s7, bSpawn
 	addi $a0, $s0, 15800	# Draw medium platform
 	jal dmp
 	addi $a0, $s0, 23072 	# Draw fuel
@@ -191,6 +282,7 @@ lev1:	# Prepare level 1
 	j mainlo
 
 lev2:	# Prepare level 2
+	sw $zero DESTROYED
 	
 	la $a0, ($s0)
 	jal ss			# Clear the screen
@@ -208,10 +300,12 @@ lev2:	# Prepare level 2
 	
 	addi $a0, $s0, 5600	# Draw small platform
 	#jal dsp
-	addi $a0, $s0, 4348	# Draw turret
-	#jal dtur
 	addi $a0, $s0, 20720	# Draw medium platform
 	jal dmp
+	addi $a0, $s0, 19204	# Draw turret
+	jal dtur
+	addi $s7, $s0, 19712	# Set the bullets positon and spawn
+	sw $s7, bSpawn
 	addi $a0, $s0, 2300 	# Draw fuel
 	jal dfuel
 	#jal dland
@@ -422,23 +516,61 @@ dship3:	lw $t1, 0($t0)		# t1 = S[i]
 	jr $ra
 
 
-dplm:	# Draw the ships thrust plume. Topleft is address of ships drawn address. $a0 is not modified
-	li $t7 0xfd2f2e		# t7 stores red
+dplm:	# Draw the ships thrust plume. Topleft is address of ships drawn address.
+	li $t7 0xff0000		# t7 stores red
 	li $t8 0xff8800		# t8 stores orange
 	li $t9 0xffe100		# t9 stores yellow
+	
+	la $t6, BHP
+	sw $s1 PLMPOS
+	
+	# Save whats possible
+	# Draw whats possible
+	# Overwrite later
+	
+	lw $t0, 1540($s1)	# Layer 1
+	sw $t0, 0($t6)
+	lw $t0, 1544($s1)
+	sw $t0, 4($t6)
+	
+	addi $t1, $s0, 31220	# Layer 2
+	bgt $s1, $t1, dplm1
+	lw $t0 2052($s1)	
+	sw $t0, 8($t6)
+	lw $t0 2056($s1)
+	sw $t0, 12($t6)
 
-	sw $t7,	2564($a0)	# Layer 1
-	sw $t8,	2568($a0)
-	sw $t8,	2572($a0)
-	sw $t7,	2576($a0)
-	sw $t7,	3076($a0)	# Layer 2
-	sw $t8,	3080($a0)
-	sw $t8,	3084($a0)
-	sw $t7,	3088($a0)
-	sw $t9,	3592($a0)	# Layer 3
-	sw $t9,	3596($a0)
-	sw $t9,	4104($a0)	# Layer 4
-	sw $t9,	4108($a0)
+	addi $t1, $t1, -512	# Layer 3
+	bgt $s1, $t1, dplm1
+	lw $t0 2564($s1)	
+	sw $t0, 16($t6)
+	lw $t0 2568($s1)
+	sw $t0, 20($t6)
+
+	addi $t1, $t1, -512	# Layer 4
+	bgt $s1, $t1, dplm1
+	lw $t0 3076($s1)	
+	sw $t0, 24($t6)
+	lw $t0 3080($s1)
+	sw $t0, 28($t6)
+	
+	
+dplm1:
+	sw $t7 1540($s1)	# Layer 1
+	sw $t7 1544($s1)
+	addi $t0, $s0, 31220
+	bgt $s1, $t0, dplm5
+	sw $t8 2052($s1)	# Layer 2
+	sw $t8 2056($s1)
+	addi $t0, $t0, -512
+	bgt $s1, $t0, dplm5
+	sw $t9 2564($s1)	# Layer 3
+	sw $t9 2568($s1)
+	addi $t0, $t0, -512
+	bgt $s1, $t0, dplm5
+	sw $t9 3076($s1)	# Layer 4
+	sw $t9 3080($s1)
+dplm5:	
 	
 	jr $ra
 
@@ -467,16 +599,69 @@ dtur:	# Draw a turret. Topleft address is stored in $a0. $a0 is not modified
 	sw $t8,	1060($a0)
 	
 	jr $ra
+
+ktur: # Draw a killed turret
+	li $t7, 0x0		# t7 stores black
+	li $t8, 0x828282	# t8 stores dark grey
+	li $t9, 0xa4a4a4 	# t9 stores light grey
 	
-dbul:	# Draw a bullet. Topleft address is stored in $a0. $a0 is not modified
-	li $t8 0xfd2f2e		# t8 stores red
-	li $t9 0xffe100		# t9 stores yellow
+	sw $t8,	20($a0)		# Layer 1
+	sw $t8,	24($a0)
+	sw $t7,	28($a0)
+	sw $t7,	512($a0)	# Layer 2
+	sw $t7,	516($a0)
+	sw $t7,	520($a0)
+	sw $t7,	524($a0)
+	sw $t8,	528($a0)
+	sw $t8,	532($a0)
+	sw $t9,	536($a0)
+	sw $t8,	540($a0)
+	sw $t8,	544($a0)
+	sw $t8,	1032($a0)	# Layer 3
+	sw $t8,	1036($a0)
+	sw $t7,	1040($a0)
+	sw $t8,	1044($a0)
+	sw $t8,	1048($a0)
+	sw $t9,	1052($a0)
+	sw $t9,	1056($a0)
+	sw $t8,	1060($a0)
 	
-	sw $t8, 0($a0)
-	sw $t9, 4($a0)
-	sw $t9, 8($a0)
+	j main3
+
+
+dbul:	# Draw a bullet. Topleft address is stored in $s7. $s7 is modified left. 
 	
-	jr $ra
+	li $t8 0xff0000		# t8 stores red
+	li $t9 0x0		# t9 = black
+	
+	lw $t0, 0($s7)
+	lw $t1, 4($s7)
+	
+	#bnez $t0, dbul1
+	sw $t8, 0($s7)
+dbul1:	bne $t1, $t8, dbul2
+	sw $t9, 4($s7)
+	
+dbul2:	beqz $t0, dbul3
+	
+	li $a0, 1
+	beq $t0, 0x828282, dsc	# dark grey
+	beq $t0, 0xa4a4a4, dsc	# light grey
+	beq $t0, 0xdf9213, dsc	# gold-bronze
+	
+dbul3:	sub $t0, $s7, $s0	# t0 = screen pos
+	andi $t0, $t0, 511	# t0 = screen x pos
+	bne $t0, 508, dbul4
+	
+	sw $t9 0($s7)
+	
+	lw $t5 DESTROYED
+	beq $t5 1 dbul5
+	lw $s7 bSpawn
+	sw $t8 0($s7)
+	
+dbul4:	addi $s7, $s7, -4	
+dbul5:	jr $ra
 
 dfuel:	# Draw a fuel barrel. Topleft address is stored in $a0. $a0 is not modified
 	li $t8 0xfd2f2e		# t8 stores red
@@ -579,7 +764,7 @@ dsc2:	jal dscrow
 	beq $a0, 2, dscm
 	
 	
-dsc3:	beqz $a0, dsc4		
+dsc3:	beqz $a0, dsc4	
 	j winp			# return back to reset if anything but a win
 dsc4:	addi $s4, $s4, 1	# draw next level if passed
 	beq $s4, 1 lev1
