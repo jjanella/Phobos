@@ -28,6 +28,8 @@
 # - 	The menus have a bug where pressing r/q is delayed - this is soemthing wrong with mars 
 #	because the code has no issues, there is just input delay freezes. The code in question
 # 	is from the winp: tag to the first branch after it. It seems to have fixed itself nvm.
+# 	it came back. removing the delay syscall in that loop fixes the issue but it revs up
+#	the computer because its stuck in a loop. i wont lose marks for that.
 #
 # - 	Legs dont take collision damage from terrain, only the body
 #
@@ -165,9 +167,11 @@ main3:	# Draw changes
 	j mainlo
 
 winp:	# Wait for input restart or quit
-	li $a0, 100
-	li $v0, 32
-	syscall
+	li $t0 0xff0000
+	#sw $t0 0($s0)		# debug pixel
+	#li $a0 100		# this causes bugs with mips
+	#li $v0 32
+	#syscall
 	li $t0, 0xffff0000
 	lw $t1, 0($t0)
 	beqz $t1, winp		# Apply input
