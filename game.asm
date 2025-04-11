@@ -16,23 +16,22 @@
 # - Milestone All
 #
 # Which approved features have been implemented for milestone 4?
-# (See the assignment handout for the list of additional features)
 # 1. Enemies shoot back
 # 2. Levels
 # 3. Shoot enemies  (with the thruster (on the lighter color))
 # 4. Moving/hiding platforms (between levels)
 # # Link to video demonstration for final submission:
-#	
-# 	https://github.com/jjanella/Phobos
+# Video  - https://github.com/jjanella/Phobos/blob/main/demo.mp4
+# Github - https://github.com/jjanella/Phobos
 # # Are you OK with us sharing the video with people outside course staff? # yes 
 # # Any additional information that the TA needs to know:
 # - 	The menus have a bug where pressing r/q is delayed - this is soemthing wrong with mars 
 #	because the code has no issues, there is just input delay freezes. The code in question
-# 	is from the winp: tag to the first branch after it. 
+# 	is from the winp: tag to the first branch after it. It seems to have fixed itself nvm.
 #
 # - 	Legs dont take collision damage from terrain, only the body
 #
-# -	The last fuel barell is very hard to get but its not needed to win
+# -	The last fuel barell is very hard to get but its not needed to win, none of them are needed technically they just improve your score.
 #####################################################################
 
 
